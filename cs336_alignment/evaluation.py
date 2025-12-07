@@ -25,14 +25,16 @@ def math_reward_fn(response: str, ground_truth: str) -> float:
 
 
 def evaluate_vllm(vllm_model : LLM, reward_fn: Callable[[str, str], float], prompts: List[str], ground_truths: List[str], eval_sampling_params: SamplingParams) -> float:
-    prefix = "Please answer the question step by step. and take the final answer in the format of <answer>...</answer>."
-    prompts = [prefix + prompt for prompt in prompts]
+    # with open("cs336_alignment/prompts/question_only.prompt", "r") as f:
+    #     r1_zero_prefix = f.read()
+    prefix = "I want you to solve the following math problem. Please think step by step and provide the answer in the format of <answer>...</answer>. Problems is {question}, Answer is:"
+    prompts = [prefix.format(question=prompt) for prompt in prompts]
     responses = vllm_model.generate(prompts, eval_sampling_params)
     correct_count = 0
     for i, response in enumerate(responses):
-        if i % 100 == 0:
-            print(f"response: {response.outputs[0].text}")
-            print(f"ground_truth: {ground_truths[i]}")
+        # if i % 100 == 0:
+        #     print(f"response: {response.outputs[0].text}")
+        #     print(f"ground_truth: {ground_truths[i]}")
         reward = reward_fn(response.outputs[0].text, ground_truths[i])
         if reward == 1.0:
             correct_count += 1
@@ -45,8 +47,11 @@ if __name__ == "__main__":
     print(f"Loaded {len(test_data)} test examples")
     prompts = [example["question"] for example in test_data]
     ground_truths = [example["answer"] for example in test_data]
-    vllm_model = LLM(model="/root/Qwen2.5-Math-1.5B")
+    # vllm_model_trained = LLM(model="checkpoints/epoch_1")
+    original_vllm_model = LLM(model="/root/Qwen2.5-Math-1.5B")
     sampling_params = SamplingParams(temperature=1.0, top_p=1.0, max_tokens=4096, stop=["</answer>"], include_stop_str_in_output=True)
-    accuracy = evaluate_vllm(vllm_model, math_reward_fn, prompts, ground_truths, sampling_params)
-    print(f"Accuracy: {accuracy}")
+    # accuracy_trained = evaluate_vllm(vllm_model_trained, math_reward_fn, prompts, ground_truths, sampling_params)
+    accuracy_original = evaluate_vllm(original_vllm_model, math_reward_fn, prompts, ground_truths, sampling_params)
+    # print(f"Accuracy (trained): {accuracy_trained}")
+    print(f"Accuracy (original): {accuracy_original}")
     print(f"Evaluated {len(prompts)} prompts")
