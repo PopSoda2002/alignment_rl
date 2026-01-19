@@ -5,15 +5,18 @@ from typing import List, Optional, Callable
 from vllm import LLM, SamplingParams
 
 def get_r1_prompts(requests: List[str]) -> List[str]:
-    with open("cs336_alignment/prompts/r1_zero.prompt") as f:
-        r1_zero_template = f.read()
-    return [r1_zero_template.format(question=request) for request in requests]
+    with open("cs336_alignment/prompts/alpaca_sft.prompt") as f:
+        alpaca_sft_template = f.read()
+    return [alpaca_sft_template.format(instruction=request, response="") for request in requests]
 
-def extract_final_number(text: str) -> Optional[str]:
+def extract_final_number(text: str) -> Optional[int]:
     numbers = re.findall(r"-?\d+\.?\d*", text)
-    if not numbers:
-        return None
-    return int(float(numbers[-1]))
+    answer: Optional[int] = None
+    try:
+        answer = int(float(numbers[-1]))
+    except Exception:
+        pass
+    return answer
 
 def reward_fn(response: str, ground_truth: str) -> float:
     response_number = extract_final_number(response)
@@ -40,7 +43,7 @@ if __name__ == "__main__":
         test_data = [json.loads(line) for line in f]
     requests = [example["question"] for example in test_data]
     ground_truths = [example["answer"] for example in test_data]
-    vllm_model = LLM(model="/root/models/Qwen2.5-Math-1.5B")
+    vllm_model = LLM(model="checkpoints/sft/Qwen2.5-Math-1.5B")
     eval_sampling_params = SamplingParams(temperature=1.0, top_p=1.0, max_tokens=2048, stop=["</answer>"], include_stop_str_in_output=True)
     reward = evaluate_vllm(vllm_model, reward_fn, requests, ground_truths, eval_sampling_params)
     print(f"Reward: {reward}")
