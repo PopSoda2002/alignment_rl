@@ -54,3 +54,16 @@ def get_response_log_probs(model: PreTrainedModel, input_ids: torch.Tensor, labe
             "token_entropy": token_entropy,
         }
     return {"log_probs": response_log_probs, "token_entropy": None}
+
+def masked_normalize(tensor: torch.Tensor, mask: torch.Tensor, dim: int | None = None, normalize_constant: float = 1.0) -> torch.Tensor:
+    """Normalize the tensor along a dimension, considering only the elements with mask value 1."""
+    return torch.sum(tensor * mask, dim=dim) / normalize_constant
+
+def sft_microbatch_train_step(
+    policy_log_probs: torch.Tensor,
+    response_mask: torch.Tensor,
+    gradient_accumulation_steps: int,
+    normalize_constant: int | None = 1.0,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Compute the policy gradient loss for a microbatch of data."""
+    raise NotImplementedError

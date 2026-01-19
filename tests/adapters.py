@@ -8,7 +8,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizerBase
 
-from cs336_alignment.training.utils import compute_entropy, get_response_log_probs, tokenize_prompt_and_output
+from cs336_alignment.training.utils import compute_entropy, get_response_log_probs, masked_normalize, tokenize_prompt_and_output
 
 
 def run_tokenize_prompt_and_output(
@@ -195,7 +195,7 @@ def run_masked_mean(tensor: torch.Tensor, mask: torch.Tensor, dim: int | None = 
         torch.Tensor, the mean of the tensor along the specified
             dimension, considering only the elements with mask value 1.
     """
-    raise NotImplementedError
+    return masked_normalize(tensor, mask, dim=dim)
 
 def run_sft_microbatch_train_step(
     policy_log_probs: torch.Tensor,
@@ -269,7 +269,7 @@ def run_masked_normalize(
         torch.Tensor, the normalized sum, where masked elements
             (mask=0) don't contribute to the sum.
     """
-    raise NotImplementedError
+    return masked_normalize(tensor, mask, dim=dim, normalize_constant=normalize_constant)
 
 
 """
