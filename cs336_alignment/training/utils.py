@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from typing import Callable
+from typing import Callable, Literal
 
 def tokenize_prompt_and_output(prompt_strs: list[str], output_strs: list[str], tokenizer: PreTrainedTokenizerBase) -> dict[str, torch.Tensor]:
     """Tokenize the prompt and output strings, and construct a mask that is 1
@@ -100,3 +100,45 @@ def compute_group_normalized_rewards(
     metadata["raw_rewards_mean"] = torch.tensor(raw_rewards).mean()
     metadata["raw_rewards_std"] = torch.tensor(raw_rewards).std()
     return torch.tensor(advantages), torch.tensor(raw_rewards), metadata
+
+def compute_naive_policy_gradient_loss(
+    raw_rewards_or_advantages: torch.Tensor,
+    policy_log_probs: torch.Tensor,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Compute the naive policy gradient loss."""
+    loss = -(raw_rewards_or_advantages * policy_log_probs)
+    return loss, {"loss": loss}
+
+def compute_grpo_clip_loss(
+    advantages: torch.Tensor,
+    policy_log_probs: torch.Tensor,
+    old_log_probs: torch.Tensor,
+    cliprange: float,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Compute the GRPO-Clip loss."""
+    ratio = torch.exp(policy_log_probs - old_log_probs)
+    clip_ratio = torch.clamp(ratio, 1 - cliprange, 1 + cliprange)
+    clip_loss = -torch.min(ratio * advantages, clip_ratio * advantages)
+    return clip_loss, {"clip_loss": clip_loss}
+
+def compute_policy_gradient_loss(
+    policy_log_probs: torch.Tensor,
+    loss_type: Literal["no_baseline", "reinforce_with_baseline", "grpo_clip"],
+    raw_rewards: torch.Tensor | None = None,
+    advantages: torch.Tensor | None = None,
+    old_log_probs: torch.Tensor | None = None,
+    cliprange: float | None = None,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Compute the policy gradient loss."""
+    if loss_type == "no_baseline":
+        assert raw_rewards is not None
+        return compute_naive_policy_gradient_loss(raw_rewards, policy_log_probs)
+    assert advantages is not None
+    if loss_type == "reinforce_with_baseline":
+        return compute_naive_policy_gradient_loss(advantages, policy_log_probs)
+    assert old_log_probs is not None
+    assert cliprange is not None
+    if loss_type == "grpo_clip":
+        return compute_grpo_clip_loss(advantages, policy_log_probs, old_log_probs, cliprange)
+    else:
+        raise ValueError(f"Invalid loss type: {loss_type}")
