@@ -39,7 +39,6 @@ def compute_entropy(logits: torch.Tensor) -> torch.Tensor:
     probs = torch.nn.functional.softmax(logits, dim=-1)
     return -torch.sum(probs * torch.log(probs), dim=-1)
 
-@torch.inference_mode()
 def get_response_log_probs(model: PreTrainedModel, input_ids: torch.Tensor, labels: torch.Tensor, return_token_entropy: bool = False) -> dict[str, torch.Tensor]:
     """Get the log-probs of the response given the prompt."""
     model = model.to(input_ids.device)
