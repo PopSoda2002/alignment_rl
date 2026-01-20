@@ -1,5 +1,8 @@
 import torch
+import torch.nn.functional as F
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
+
+from typing import Callable
 
 def tokenize_prompt_and_output(prompt_strs: list[str], output_strs: list[str], tokenizer: PreTrainedTokenizerBase) -> dict[str, torch.Tensor]:
     """Tokenize the prompt and output strings, and construct a mask that is 1
@@ -63,7 +66,37 @@ def sft_microbatch_train_step(
     policy_log_probs: torch.Tensor,
     response_mask: torch.Tensor,
     gradient_accumulation_steps: int,
-    normalize_constant: int | None = 1.0,
+    normalize_constant: float = 1.0,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Compute the policy gradient loss for a microbatch of data."""
-    raise NotImplementedError
+    # Batch size * gradient_accumulation_steps * normalize_constant
+    norm = gradient_accumulation_steps * normalize_constant * policy_log_probs.shape[0]
+    loss = -(policy_log_probs * response_mask).sum() / norm
+    loss.backward()
+    return loss, {"loss": loss}
+
+def compute_group_normalized_rewards(
+    reward_fn: Callable[[str, str], dict[str, float]], rollout_responses: list[str], repeated_ground_truths: list[str], group_size: int, advantage_eps: float, normalize_by_std: bool):
+    advantages = []
+    raw_rewards = []
+    metadata = {}
+    for i in range(0, len(rollout_responses), group_size):
+        group_rollout_responses = rollout_responses[i:i+group_size]
+        group_repeated_ground_truths = repeated_ground_truths[i:i+group_size]
+        group_rewards = []
+        group_advantages = []
+        for response, ground_truth in zip(group_rollout_responses, group_repeated_ground_truths):
+            reward = reward_fn(response, ground_truth)["reward"]
+            group_rewards.append(reward)
+        raw_rewards.extend(group_rewards)
+        group_rewards = torch.tensor(group_rewards)
+        group_rewards_mean = group_rewards.mean()
+        if normalize_by_std:
+            group_rewards_std = group_rewards.std()
+            group_advantages = (group_rewards - group_rewards_mean) / (group_rewards_std + advantage_eps)
+        else:
+            group_advantages = (group_rewards - group_rewards_mean)
+        advantages.extend(group_advantages.tolist())
+    metadata["raw_rewards_mean"] = torch.tensor(raw_rewards).mean()
+    metadata["raw_rewards_std"] = torch.tensor(raw_rewards).std()
+    return torch.tensor(advantages), torch.tensor(raw_rewards), metadata
