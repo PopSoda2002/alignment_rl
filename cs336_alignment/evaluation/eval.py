@@ -30,6 +30,13 @@ def reward_fn(response: str, ground_truth: str) -> float:
         return 0.0
     return 1.0 if response_number == ground_truth_number else 0.0
 
+def gsm8k_reward_fn(response: str, ground_truth: str) -> dict[str, float]:
+    response_number = extract_final_number(response)
+    ground_truth_number = extract_final_number(ground_truth)
+    if response_number is None or ground_truth_number is None:
+        return {"reward": 0.0}
+    return {"reward": 1.0} if response_number == ground_truth_number else {"reward": 0.0}
+
 def evaluate_vllm(vllm_model: LLM, reward_fn: Callable[[str, str], float], requests: List[str], 
 ground_truths: List[str], eval_sampling_params: SamplingParams) -> float:
     prompts = get_r1_prompts(requests)

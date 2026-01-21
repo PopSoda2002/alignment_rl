@@ -6,6 +6,8 @@ import os
 from tqdm import tqdm
 from vllm import SamplingParams
 
+import wandb
+
 from utils import tokenize_prompt_and_output, get_response_log_probs, sft_microbatch_train_step
 from cs336_alignment.evaluation.eval import init_vllm, load_policy_into_vllm_instance, evaluate_vllm_on_gsm8k
 
@@ -25,6 +27,7 @@ class SFTTrainer:
         self.model.train()
         grad_accumulation_steps = 5
         print(f"Step 0 reward: {evaluate_vllm_on_gsm8k(self.vllm_model)}")
+        wandb.init(project="sft", name="sft")
         for step in range(self.sft_steps):
             for i, (prompts, responses) in tqdm(enumerate(self.data_loader)):
                 tokenized_data = tokenize_prompt_and_output(prompts, responses, self.tokenizer)
@@ -38,7 +41,9 @@ class SFTTrainer:
                     self.optimizer.zero_grad()
                     # print(f"Step {step} loss: {loss.item()}")
             load_policy_into_vllm_instance(self.model, self.vllm_model)
-            print(f"Step {step + 1} reward: {evaluate_vllm_on_gsm8k(self.vllm_model)}")
+            reward = evaluate_vllm_on_gsm8k(self.vllm_model)
+            print(f"Step {step + 1} reward: {reward}")
+            wandb.log({"reward": reward}, step=step + 1)
             
         output_dir = "checkpoints/sft/Qwen2.5-Math-1.5B"
         print(f"Saving model to {output_dir}")
